@@ -1,0 +1,70 @@
+def AGP_VERSION = "4.0.1"
+def KOTLIN_VERSION = "1.6.10"
+
+def REPO_PUBLIC = 'http://maven.aliyun.com/nexus/content/groups/public/'
+def REPO_JCENTER = 'http://maven.aliyun.com/repository/jcenter'
+def REPO_GOOGLE = 'https://maven.aliyun.com/repository/google'
+def REPO_CENTRAL = 'https://maven.aliyun.com/repository/central'
+def REPO_GRADLE_PLUGIN = 'https://maven.aliyun.com/repository/gradle-plugin'
+
+def replaceRepos = { repoHandler ->
+    repoHandler.all { repo ->
+        if (repo instanceof MavenArtifactRepository) {
+            def url = repo.url.toString()
+            if (
+                url.contains('repo1.maven.org') ||
+                url.contains('repo.maven.apache.org') ||
+                url.contains('jcenter.bintray.com') ||
+                url.contains('dl.google.com') ||
+                url.contains('maven.google.com') ||
+                url.contains('plugins.gradle.org')
+            ) {
+                println "[init.gradle] remove repo -> ${repo.url}"
+                repoHandler.remove(repo)
+            }
+        }
+    }
+
+    repoHandler.maven {
+        url REPO_PUBLIC
+        allowInsecureProtocol = true
+    }
+    repoHandler.maven {
+        url REPO_JCENTER
+        allowInsecureProtocol = true
+    }
+    repoHandler.maven { url REPO_GOOGLE }
+    repoHandler.maven { url REPO_CENTRAL }
+    repoHandler.maven { url REPO_GRADLE_PLUGIN }
+}
+
+gradle.beforeProject { project ->
+    replaceRepos(project.buildscript.repositories)
+    replaceRepos(project.repositories)
+
+    project.buildscript.configurations.all { cfg ->
+        if (cfg.name == "classpath") {
+            cfg.resolutionStrategy.eachDependency { details ->
+                if (details.requested.group == "com.android.tools.build" &&
+                    details.requested.name == "gradle") {
+                    details.useVersion AGP_VERSION
+                    details.because("force AGP version from init.gradle")
+                }
+
+                if (details.requested.group == "org.jetbrains.kotlin" &&
+                    details.requested.name == "kotlin-gradle-plugin") {
+                    details.useVersion KOTLIN_VERSION
+                    details.because("force Kotlin Gradle Plugin version from init.gradle")
+                }
+            }
+        }
+    }
+
+    project.configurations.all { cfg ->
+        cfg.resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == "org.jetbrains.kotlin") {
+                details.useVersion KOTLIN_VERSION
+            }
+        }
+    }
+}
