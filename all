@@ -1,0 +1,443 @@
+build.gradle:
+ext {
+    var = '1.1.2'
+}// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+    ext.kotlin_version = '1.6.10'
+    ext.brsdk_version = '8.19.0'
+    ext {
+        RNNKotlinVersion = "1.3.61"
+        buildToolsVersion = "30.0.0"
+        minSdkVersion = 21
+        compileSdkVersion = 30
+        targetSdkVersion = 30
+        androidXCore = "1.7.0" // <-- Add this. Check versions here: https://developer.android.com/jetpack/androidx/releases/core
+    }
+    repositories {
+        maven {
+            url 'http://maven.aliyun.com/repository/jcenter'
+            allowInsecureProtocol = true
+        }
+        maven {
+            url 'http://maven.aliyun.com/nexus/content/groups/public/'
+            allowInsecureProtocol = true
+        }
+        maven { url 'https://gitlab.bonree.com/BonreeSDK_TAPM/Android/raw/master' }
+        google()
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        // 添加 gradle 3.2.0+ 依赖
+        classpath "com.android.tools.build:gradle:4.0.1"
+        // NOTE: Do not place your application dependencies here; they belong
+        // in the individual module build.gradle files
+        // 添加神策分析 android-gradle-plugin2 依赖
+        classpath 'com.sensorsdata.analytics.android:android-gradle-plugin2:3.4.1'
+        classpath "com.bonree.agent.android:bonree:$brsdk_version"
+    }
+}
+
+allprojects {
+    repositories {
+        maven{
+            url 'http://maven.aliyun.com/repository/public/'
+            allowInsecureProtocol = true
+        }
+        maven {
+            // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
+            url("$rootDir/../node_modules/react-native/android")
+        }
+        maven {
+            // Android JSC is installed from npm
+            url("$rootDir/../node_modules/jsc-android/dist")
+        }
+
+        maven { url 'https://www.jitpack.io' }
+        maven { url 'https://gitlab.bonree.com/BonreeSDK_TAPM/Android/raw/master' }
+        mavenCentral()
+        google()
+    }
+}
+
+subprojects { subproject ->
+    afterEvaluate{
+        if((subproject.plugins.hasPlugin('android') || subproject.plugins.hasPlugin('android-library'))) {
+            android {
+                compileSdkVersion rootProject.ext.compileSdkVersion
+                buildToolsVersion rootProject.ext.buildToolsVersion
+            }
+        }
+    }
+}
+
+
+
+settings.gradle
+rootProject.name = 'transformer'
+apply from: '../node_modules/react-native-unimodules/gradle.groovy'; includeUnimodulesProjects()
+apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
+include ':react-native-config' 
+project(':react-native-config').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-config/android')
+include ':app'
+
+app/build.gradle
+apply plugin: "com.android.application"
+// apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
+// project.ext.vectoricons = [
+//     iconFontNames: [ 'MaterialIcons.ttf', 'EvilIcons.ttf' ] // Name of the font files you want to copy
+// ]
+apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
+apply from: '../../node_modules/react-native-unimodules/gradle.groovy'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-android-extensions'
+apply plugin: 'kotlin-kapt'
+apply plugin: 'com.sensorsdata.analytics.android'
+apply plugin: 'bonree'
+
+import com.android.build.OutputFile
+import groovy.json.JsonSlurper
+
+/**
+ * The react.gradle file registers a task for each build variant (e.g. bundleDebugJsAndAssets
+ * and bundleReleaseJsAndAssets).
+ * These basically call `react-native bundle` with the correct arguments during the Android build
+ * cycle. By default, bundleDebugJsAndAssets is skipped, as in debug/dev mode we prefer to load the
+ * bundle directly from the development server. Below you can see all the possible configurations
+ * and their defaults. If you decide to add a configuration block, make sure to add it before the
+ * `apply from: "../../node_modules/react-native/react.gradle"` line.
+ *
+ * project.ext.react = [
+ *   // the name of the generated asset file containing your JS bundle
+ *   bundleAssetName: "index.android.bundle",
+ *
+ *   // the entry file for bundle generation. If none specified and
+ *   // "index.android.js" exists, it will be used. Otherwise "index.js" is
+ *   // default. Can be overridden with ENTRY_FILE environment variable.
+ *   entryFile: "index.android.js",
+ *
+ *   // https://reactnative.dev/docs/performance#enable-the-ram-format
+ *   bundleCommand: "ram-bundle",
+ *
+ *   // whether to bundle JS and assets in debug mode
+ *   bundleInDebug: false,
+ *
+ *   // whether to bundle JS and assets in release mode
+ *   bundleInRelease: true,
+ *
+ *   // whether to bundle JS and assets in another build variant (if configured).
+ *   // See http://tools.android.com/tech-docs/new-build-system/user-guide#TOC-Build-Variants
+ *   // The configuration property can be in the following formats
+ *   //         'bundleIn${productFlavor}${buildType}'
+ *   //         'bundleIn${buildType}'
+ *   // bundleInFreeDebug: true,
+ *   // bundleInPaidRelease: true,
+ *   // bundleInBeta: true,
+ *
+ *   // whether to disable dev mode in custom build variants (by default only disabled in release)
+ *   // for example: to disable dev mode in the staging build type (if configured)
+ *   devDisabledInStaging: true,
+ *   // The configuration property can be in the following formats
+ *   //         'devDisabledIn${productFlavor}${buildType}'
+ *   //         'devDisabledIn${buildType}'
+ *
+ *   // the root of your project, i.e. where "package.json" lives
+ *   root: "../../",
+ *
+ *   // where to put the JS bundle asset in debug mode
+ *   jsBundleDirDebug: "$buildDir/intermediates/assets/debug",
+ *
+ *   // where to put the JS bundle asset in release mode
+ *   jsBundleDirRelease: "$buildDir/intermediates/assets/release",
+ *
+ *   // where to put drawable resources / React Native assets, e.g. the ones you use via
+ *   // require('./image.png')), in debug mode
+ *   resourcesDirDebug: "$buildDir/intermediates/res/merged/debug",
+ *
+ *   // where to put drawable resources / React Native assets, e.g. the ones you use via
+ *   // require('./image.png')), in release mode
+ *   resourcesDirRelease: "$buildDir/intermediates/res/merged/release",
+ *
+ *   // by default the gradle tasks are skipped if none of the JS files or assets change; this means
+ *   // that we don't look at files in android/ or ios/ to determine whether the tasks are up to
+ *   // date; if you have any other folders that you want to ignore for performance reasons (gradle
+ *   // indexes the entire tree), add them here. Alternatively, if you have JS files in android/
+ *   // for example, you might want to remove it from here.
+ *   inputExcludes: ["android/**", "ios/**"],
+ *
+ *   // override which node gets called and with what additional arguments
+ *   nodeExecutableAndArgs: ["node"],
+ *
+ *   // supply additional arguments to the packager
+ *   extraPackagerArgs: []
+ * ]
+ */
+
+project.ext.react = [
+    enableHermes: false,  // clean and rebuild if changing
+]
+
+apply from: "../../node_modules/react-native/react.gradle"
+
+/**
+ * Set this to true to create two separate APKs instead of one:
+ *   - An APK that only works on ARM devices
+ *   - An APK that only works on x86 devices
+ * The advantage is the size of the APK is reduced by about 4MB.
+ * Upload all the APKs to the Play Store and people will download
+ * the correct one based on the CPU architecture of their device.
+ */
+def enableSeparateBuildPerCPUArchitecture = false
+
+/**
+ * Run Proguard to shrink the Java bytecode in release builds.
+ */
+def enableProguardInReleaseBuilds = false
+
+/**
+ * The preferred build flavor of JavaScriptCore.
+ *
+ * For example, to use the international variant, you can use:
+ * `def jscFlavor = 'org.webkit:android-jsc-intl:+'`
+ *
+ * The international variant includes ICU i18n library and necessary data
+ * allowing to use e.g. `Date.toLocaleString` and `String.localeCompare` that
+ * give correct results when using with locales other than en-US.  Note that
+ * this variant is about 6MiB larger per architecture than default.
+ */
+def jscFlavor = 'org.webkit:android-jsc:+'
+
+/**
+ * Whether to enable the Hermes VM.
+ *
+ * This should be set on project.ext.react and mirrored here.  If it is not set
+ * on project.ext.react, JavaScript will not be compiled to Hermes Bytecode
+ * and the benefits of using Hermes will therefore be sharply reduced.
+ */
+def enableHermes = project.ext.react.get("enableHermes", false);
+
+/**
+ * 从 package.json 中获取版本号
+ */
+def getVersionFromNpm() {
+	//  Read and parse package.json file from project root
+	def inputFile = new File("$rootDir/../package.json")
+	def packageJson = new JsonSlurper().parseText(inputFile.text)
+
+	// Return the version, you can get any value this way
+	return packageJson["version"]
+}
+
+def appVersion = getVersionFromNpm()
+
+android {
+    compileSdkVersion rootProject.ext.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    defaultConfig {
+        applicationId APP_APPLICATION_ID
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 949
+        versionName appVersion
+        multiDexEnabled true
+        resValue "string", "build_config_package", "com.harvestwm.jiashicaifu"
+    }
+
+    splits {
+        abi {
+            reset()
+            enable enableSeparateBuildPerCPUArchitecture
+            universalApk false  // If true, also generate a universal APK
+            include "armeabi-v7a", "x86", "arm64-v8a", "x86_64"
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs =['src/main/libs']
+            assets.srcDirs =['src/main/assets', '../../static.bundle']
+        }
+    }
+
+    signingConfigs {
+		debug {
+			storeFile file(KEY_STORE_FILE)
+			storePassword KEY_STORE_PASSWORD
+			keyAlias KEY_ALIAS
+			keyPassword KEY_PASSWORD
+			v1SigningEnabled true
+			v2SigningEnabled true
+		}
+        release {
+            storeFile file(KEY_STORE_FILE)
+            storePassword KEY_STORE_PASSWORD
+            keyAlias KEY_ALIAS
+            keyPassword KEY_PASSWORD
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+
+            buildConfigField "String", "UMENG_CHANNEL", "\"$UMENG_CHANNEL\""
+            buildConfigField "String", "UMENG_KEY", "\"$UMENG_KEY\""
+            buildConfigField "String", "UMENG_PUSH_SECRET", "\"$UMENG_PUSH_SECRET\""
+            manifestPlaceholders = [
+                    APPLICATION_ID: APP_APPLICATION_ID,
+            ]
+        }
+        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig signingConfigs.release
+            minifyEnabled enableProguardInReleaseBuilds
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+
+            buildConfigField "String", "UMENG_CHANNEL", "\"$UMENG_CHANNEL\""
+            buildConfigField "String", "UMENG_KEY", "\"$UMENG_KEY\""
+            buildConfigField "String", "UMENG_PUSH_SECRET", "\"$UMENG_PUSH_SECRET\""
+            manifestPlaceholders = [
+                    APPLICATION_ID: APP_APPLICATION_ID,
+            ]
+        }
+    }
+
+    // applicationVariants are e.g. debug, release
+	applicationVariants.all { variant ->
+		variant.outputs.each { output ->
+			// For each separate APK per architecture, set a unique version code as described here:
+			// https://developer.android.com/studio/build/configure-apk-splits.html
+			def versionCodes = ["armeabi-v7a": 1, "x86": 2, "arm64-v8a": 3, "x86_64": 4]
+			def abi = output.getFilter(OutputFile.ABI)
+			if (abi != null) {  // null for the universal-debug, universal-release variants
+				output.versionCodeOverride =
+						versionCodes.get(abi) * 1048576 + defaultConfig.versionCode
+			}
+		}
+	}
+
+    packagingOptions {
+        pickFirst 'lib/x86/libc++_shared.so'
+        pickFirst 'lib/x86_64/libjsc.so'
+        pickFirst 'lib/arm64-v8a/libjsc.so'
+        pickFirst 'lib/arm64-v8a/libc++_shared.so'
+        pickFirst 'lib/x86_64/libc++_shared.so'
+        pickFirst 'lib/armeabi-v7a/libc++_shared.so'
+    }
+
+	buildFeatures {
+		dataBinding = true
+	}
+
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar', '*.so'], dir: 'libs')
+    //noinspection GradleDynamicVersion
+    implementation 'com.facebook.react:react-native:+'
+    // From node_modules
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.0.0'
+    implementation 'com.github.DylanCaiCoding:ActivityResultLauncher:1.1.2'
+
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation 'com.android.support:multidex:+'
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    //友盟基础库依赖（必须）
+    implementation 'com.umeng.umsdk:common:9.5.1'
+    implementation 'com.umeng.umsdk:asms:1.6.3'
+    implementation 'com.umeng.umsdk:share-core:7.2.1'
+	//分享面板功能，可选
+	implementation 'com.umeng.umsdk:share-board:7.2.1'
+	//微信完整版
+	implementation 'com.umeng.umsdk:share-wx:7.2.1'
+	// implementation 'com.tencent.mm.opensdk:wechat-sdk-android-without-mta:6.7.9'
+	api 'com.tencent.mm.opensdk:wechat-sdk-android:+'
+    //添加 Sensors Analytics SDK 依赖
+    implementation 'com.sensorsdata.analytics.android:SensorsAnalyticsSDK:6.0.0'
+    // 旷视人脸识别
+    implementation(name:'meglive_still3.6.2', ext:'aar')
+
+	implementation 'com.iqiyi.xcrash:xcrash-android-lib:3.0.0'
+
+    // 海鑫 Android 人脸活体
+    implementation(name: 'hispLive_V4.1.2', ext: 'aar')
+    implementation 'net.java.dev.jna:jna:5.8.0@aar'
+
+	// 双录
+	implementation(name:'hs-ai-recorder-release', ext:'aar')
+	implementation(name:'hscommon-release', ext:'aar')
+	implementation(name:'hsonesoulvideo-release', ext:'aar')
+	implementation(name:'camera-release', ext:'aar')
+	implementation(name:'exclude_livenessdetectorsdk_release', ext:'aar')
+	implementation(name:'idcheckjar-release', ext:'aar')
+	implementation(name:'livenessdetectionviewsdk-release', ext:'aar')
+	implementation "com.android.support:support-v13:28.0.0"
+	// fastjson
+	implementation 'com.alibaba:fastjson:1.2.60'
+	// 模拟器检测
+	implementation 'com.lahm.library:easy-protector-release:1.1.0'
+	// socket.io
+	implementation('io.socket:socket.io-client:1.0.0') {
+		// excluding org.json which is provided by Android
+		exclude group: 'org.json', module: 'json'
+	}
+	implementation "androidx.lifecycle:lifecycle-process:2.3.1"
+	implementation 'androidx.appcompat:appcompat:1.3.0'
+	implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+	implementation 'androidx.navigation:navigation-fragment:2.4.1'
+	implementation 'androidx.navigation:navigation-ui:2.4.1'
+	implementation "com.bonree.agent.android:agent-lib:$brsdk_version"
+
+    addUnimodulesDependencies()
+    debugImplementation("com.facebook.flipper:flipper:${FLIPPER_VERSION}") {
+        exclude group: 'com.facebook.fbjni'
+
+    }
+    debugImplementation("com.facebook.flipper:flipper-network-plugin:${FLIPPER_VERSION}") {
+        exclude group: 'com.facebook.flipper'
+        exclude group: 'com.squareup.okhttp3', module: 'okhttp'
+    }
+    debugImplementation("com.facebook.flipper:flipper-fresco-plugin:${FLIPPER_VERSION}") {
+        exclude group: 'com.facebook.flipper'
+    }
+    if (enableHermes) {
+        def hermesPath = "../../node_modules/hermes-engine/android/";
+        debugImplementation files(hermesPath + "hermes-debug.aar")
+        releaseImplementation files(hermesPath + "hermes-release.aar")
+    } else {
+        implementation jscFlavor
+    }
+
+}
+
+repositories {
+    flatDir {
+        dirs 'libs'
+    }
+}
+// Run this once to be able to run the application with BUCK
+// puts all compile dependencies into folder libs for BUCK to use
+task copyDownloadableDepsToLibs(type: Copy) {
+    from configurations.compile
+    into 'libs'
+}
+
+// 禁止获取 Android ID
+sensorsAnalytics {
+    sdk {
+	    disableAndroidID = true
+    }
+}
+
+
+apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+
+
